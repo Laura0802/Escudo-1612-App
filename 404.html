@@ -200,33 +200,55 @@
 
   <script>
     /* ============================================================
-       GOOGLE ANALYTICS 4 — pega tu ID en la línea de abajo.
-       Ejemplo:  var GA_ID = "G-XXXXXXXXXX";
-       Si lo dejas vacío, no se carga nada de Google.
+       GOOGLE ANALYTICS 4
+       El ID se define arriba en build.mjs (const GA_ID) o con la
+       variable de entorno GA_ID. Si está vacío no se carga nada.
+       Eventos: page_view (por sección), scroll_90, outbound_click.
+       Depuración: añade ?ga_debug=1 a la URL y mira DebugView.
        ============================================================ */
     (function () {
-      var GA_ID = "";
+      var GA_ID = "G-KVMNRTTYSL";
       if (!GA_ID) return;
 
+      var TITLES = {
+        "/": "Inicio",
+        "/mandato": "El Mandato",
+        "/impacto": "Impacto real",
+        "/consenso": "Consenso (simulador)",
+        "/ajustes": "Ajustes",
+        "/fuentes": "Fuentes"
+      };
+
+      var DEBUG = /(?:^|[?&])ga_debug=1(?:&|$)/.test(location.search);
+
       window.dataLayer = window.dataLayer || [];
-      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag = function () {
+        window.dataLayer.push(arguments);
+      };
       window.gtag("js", new Date());
-      window.gtag("config", GA_ID, { send_page_view: false });
+      window.gtag("config", GA_ID, {
+        send_page_view: false,
+        debug_mode: DEBUG
+      });
 
       var s = document.createElement("script");
       s.async = true;
       s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
       document.head.appendChild(s);
 
-      var last = "";
+      function route() {
+        return window.__b44Path || location.pathname || "/";
+      }
+
+      var lastRoute = "";
       function pageView() {
-        var p = (window.__b44Path || location.pathname) + location.search;
-        if (p === last) return;
-        last = p;
+        var p = route();
+        if (p === lastRoute) return;
+        lastRoute = p;
         window.gtag("event", "page_view", {
           page_path: p,
           page_location: location.href,
-          page_title: document.title
+          page_title: TITLES[p] || document.title || "Escudo 1612"
         });
       }
 
@@ -241,6 +263,42 @@
       });
       window.addEventListener("popstate", pageView);
       pageView();
+
+      /* --- profundidad de lectura: 90% de la página --- */
+      var sentScroll = false;
+      window.addEventListener(
+        "scroll",
+        function () {
+          if (sentScroll) return;
+          var doc = document.documentElement;
+          var seen = (window.scrollY + window.innerHeight) / (doc.scrollHeight || 1);
+          if (seen < 0.9) return;
+          sentScroll = true;
+          window.gtag("event", "scroll_90", { page_path: route() });
+          setTimeout(function () {
+            sentScroll = false;
+          }, 4000);
+        },
+        { passive: true }
+      );
+
+      /* --- clics que salen del sitio (enlaces de Fuentes, etc.) --- */
+      document.addEventListener(
+        "click",
+        function (e) {
+          var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+          if (!a) return;
+          var href = a.getAttribute("href") || "";
+          if (!/^https?:\/\//i.test(href)) return;
+          if (href.indexOf(location.origin) === 0) return;
+          window.gtag("event", "outbound_click", {
+            link_url: href,
+            link_text: (a.textContent || "").trim().slice(0, 100),
+            page_path: route()
+          });
+        },
+        true
+      );
     })();
   </script>
 </head>
