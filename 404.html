@@ -15,10 +15,35 @@
 
   <script>
     (function () {
-      if (location.protocol !== "file:") return;
+      var KNOWN = ["/", "/mandato", "/impacto", "/consenso", "/ajustes", "/fuentes"];
+      var isFile = location.protocol === "file:";
 
-      // ruta virtual: "/" y luego la que pida la app
-      window.__b44Path = "/";
+      function routeSuffix(p) {
+        for (var i = 0; i < KNOWN.length; i++) {
+          var r = KNOWN[i];
+          if (r === "/" || r === p) continue;
+          if (p.length > r.length && p.slice(-r.length) === r) {
+            return { base: p.slice(0, p.length - r.length), route: r };
+          }
+        }
+        return null;
+      }
+
+      var realPath = location.pathname;
+      var where = { base: "", route: "/" };
+
+      if (!isFile) {
+        if (KNOWN.indexOf(realPath) !== -1) {
+          where = { base: "", route: realPath };
+        } else if (/\.html?$/i.test(realPath)) {
+          where = { base: realPath.replace(/\/[^/]*$/, ""), route: "/" };
+        } else {
+          where = routeSuffix(realPath) || { base: realPath.replace(/\/$/, ""), route: "/" };
+        }
+      }
+
+      window.__b44Path = where.route;
+      window.__b44Base = where.base;
 
       function cleanPath(p) {
         if (!p) return "/";
@@ -58,18 +83,32 @@
       var nativeReplace = proto.replaceState;
       var realUrl = String(window.location.href);
 
+      function targetUrl(route) {
+        if (isFile) return realUrl;
+        var base = window.__b44Base || "";
+        return base + (route === "/" ? "/" : route);
+      }
+
       proto.pushState = function (state, title, url) {
         window.__b44Path = pathFromUrl(url);
         try {
-          nativePush.call(this, withMeta(state), title, realUrl);
-        } catch (e) {}
+          nativePush.call(this, withMeta(state), title, targetUrl(window.__b44Path));
+        } catch (e) {
+          try {
+            nativePush.call(this, withMeta(state), title, realUrl);
+          } catch (e2) {}
+        }
       };
 
       proto.replaceState = function (state, title, url) {
         window.__b44Path = pathFromUrl(url);
         try {
-          nativeReplace.call(this, withMeta(state), title, realUrl);
-        } catch (e) {}
+          nativeReplace.call(this, withMeta(state), title, targetUrl(window.__b44Path));
+        } catch (e) {
+          try {
+            nativeReplace.call(this, withMeta(state), title, realUrl);
+          } catch (e2) {}
+        }
       };
 
       window.addEventListener(
@@ -100,8 +139,9 @@
         var txt = document.createElement("p");
         txt.style.cssText = "margin:0;flex:1";
         txt.innerHTML =
-          "<strong>Modo archivo.</strong> Este navegador no permite navegar desde un " +
-          "archivo local. Abre <strong>Abrir Escudo.cmd</strong> (misma carpeta) o el sitio publicado.";
+          "<strong>Ruta no reconocida.</strong> No pude resolver la sección inicial. Si abriste " +
+          "el archivo con doble clic, usa <strong>Abrir Escudo.cmd</strong>; si es el sitio " +
+          "publicado, revisa la dirección.";
         var close = document.createElement("button");
         close.type = "button";
         close.textContent = "\u00d7";
