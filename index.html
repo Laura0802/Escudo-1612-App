@@ -308,6 +308,160 @@
       );
     })();
   </script>
+
+  <script>
+    /* ============================================================
+       Botón de instalación dentro de la página.
+       Chrome, Edge y Android avisan con «beforeinstallprompt»; ahí
+       mostramos un botón que lanza el diálogo del sistema.
+       En iPhone e iPad ese aviso no existe, así que se muestra una
+       indicación con los pasos manuales.
+       ============================================================ */
+    (function () {
+      var DISMISS_KEY = "escudo1612_install_dismissed";
+      var deferred = null;
+      var button = null;
+      var hint = null;
+
+      function installed() {
+        return (
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.navigator.standalone === true
+        );
+      }
+
+      function dismissedRecently() {
+        try {
+          var t = Number(localStorage.getItem(DISMISS_KEY) || 0);
+          return Date.now() - t < 1000 * 60 * 60 * 24 * 30;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function remember() {
+        try {
+          localStorage.setItem(DISMISS_KEY, String(Date.now()));
+        } catch (e) {}
+      }
+
+      function stylePill(el) {
+        el.style.cssText =
+          "position:fixed;left:18px;bottom:18px;z-index:9998;display:flex;align-items:center;gap:9px;" +
+          "padding:11px 16px 11px 13px;border:0;border-radius:999px;cursor:pointer;" +
+          "background:#1F4568;color:#fff;box-shadow:0 12px 28px -12px rgba(31,69,104,.75);" +
+          "font:600 13.5px/1 system-ui,-apple-system,'Segoe UI',sans-serif;" +
+          "opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s";
+      }
+
+      function show(el) {
+        requestAnimationFrame(function () {
+          el.style.opacity = "1";
+          el.style.transform = "translateY(0)";
+        });
+      }
+
+      function hide(el) {
+        if (!el) return;
+        el.style.opacity = "0";
+        el.style.transform = "translateY(8px)";
+        setTimeout(function () {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 260);
+      }
+
+      function closeBtn(el) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "\u00d7";
+        b.setAttribute("aria-label", "Descartar");
+        b.style.cssText =
+          "margin-left:4px;background:transparent;border:0;color:rgba(255,255,255,.7);" +
+          "font-size:16px;line-height:1;cursor:pointer;padding:0 2px";
+        b.onclick = function (ev) {
+          ev.stopPropagation();
+          remember();
+          hide(el);
+        };
+        return b;
+      }
+
+      function buildButton() {
+        if (button) return button;
+        button = document.createElement("button");
+        button.type = "button";
+        button.setAttribute("aria-label", "Instalar Escudo 1612 como aplicación");
+        button.innerHTML =
+          '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg><span>Instalar app</span>';
+        stylePill(button);
+        button.onclick = function () {
+          if (!deferred) return;
+          deferred.prompt();
+          deferred.userChoice.then(function () {
+            remember();
+            hide(button);
+            button = null;
+            deferred = null;
+          });
+        };
+        return button;
+      }
+
+      function offerInstall() {
+        if (installed() || dismissedRecently()) return;
+        var b = buildButton();
+        document.body.appendChild(b);
+        show(b);
+      }
+
+      function buildIosHint() {
+        var box = document.createElement("div");
+        box.setAttribute("role", "status");
+        box.style.cssText =
+          "position:fixed;left:14px;right:14px;bottom:14px;z-index:9998;display:flex;" +
+          "align-items:flex-start;gap:10px;padding:13px 14px;border-radius:16px;" +
+          "background:#1F4568;color:#fff;box-shadow:0 16px 36px -16px rgba(31,69,104,.8);" +
+          "font:13px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif;" +
+          "opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s";
+        var txt = document.createElement("p");
+        txt.style.cssText = "margin:0;flex:1";
+        txt.innerHTML =
+          "<strong>Para instalarla:</strong> toca <strong>Compartir</strong> " +
+          "y elige <strong>Añadir a pantalla de inicio</strong>.";
+        box.appendChild(txt);
+        box.appendChild(closeBtn(box));
+        return box;
+      }
+
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        deferred = e;
+        if (document.body) offerInstall();
+        else document.addEventListener("DOMContentLoaded", offerInstall);
+      });
+
+      window.addEventListener("appinstalled", function () {
+        remember();
+        hide(button);
+        hide(hint);
+        button = null;
+        hint = null;
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        if (installed() || dismissedRecently()) return;
+        var isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        var isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+        if (isIos && isSafari) {
+          hint = buildIosHint();
+          document.body.appendChild(hint);
+          setTimeout(function () {
+            show(hint);
+          }, 1200);
+        }
+      });
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>
